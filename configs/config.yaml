@@ -1,0 +1,69 @@
+# Light Curve Transformer Configuration
+
+# Data parameters
+data:
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  splits_dir: "data/splits"
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+
+# Preprocessing parameters
+preprocessing:
+  sigma_threshold: 3.0
+  rolling_window: 50
+  savgol_window: 101
+  savgol_poly: 3
+  max_gap_days: 2.0
+  segment_duration_days: 90.0
+  cadence_minutes: 30.0  # Kepler long cadence
+  overlap: 0.0
+
+# Model architecture
+model:
+  input_dim: 1  # Flux only
+  d_model: 256
+  n_heads: 8
+  n_layers: 4
+  d_ff: 1024
+  n_classes: 2
+  dropout: 0.2
+  max_len: 4320  # For 90-day segments at 30-min cadence
+  use_temporal_encoding: true
+
+# Training parameters
+training:
+  batch_size: 64
+  num_epochs: 100
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  optimizer: "adamw"
+  scheduler_patience: 5
+  early_stopping_patience: 15
+  use_amp: true  # Mixed precision training
+  num_workers: 4
+  seed: 42
+
+# Paths
+paths:
+  checkpoint_dir: "checkpoints"
+  log_dir: "logs"
+  results_dir: "results"
+
+# Data augmentation
+augmentation:
+  enabled: true
+  methods:
+    - "noise"
+    - "shift"
+    - "scale"
+    - "warp"
+  noise_level: 0.01
+  max_shift: 50
+  scale_range: [0.9, 1.1]
+
+# Class names (for visualization)
+classes:
+  - "Non-Transit"
+  - "Transit"

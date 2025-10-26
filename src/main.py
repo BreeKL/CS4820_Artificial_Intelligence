@@ -185,6 +185,8 @@ def main(args):
         print(f"Resuming from checkpoint: {args.resume}")
         trainer.load_checkpoint(args.resume)
     
+
+    
     # Train
     print("\n" + "="*60)
     print("Starting training...")

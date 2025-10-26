@@ -26,20 +26,20 @@ model:
   d_model: 256
   n_heads: 8
   n_layers: 4
-  d_ff: 1024
+  d_ff: 512
   n_classes: 2
   dropout: 0.2
-  max_len: 4320  # For 90-day segments at 30-min cadence
+  max_len: 2000
   use_temporal_encoding: true
 
 # Training parameters
 training:
-  batch_size: 64
+  batch_size: 4
   num_epochs: 100
-  learning_rate: 0.0001
+  learning_rate: 0.0005
   weight_decay: 0.01
   optimizer: "adamw"
-  scheduler_patience: 5
+  scheduler_patience: 3
   early_stopping_patience: 15
   use_amp: true  # Mixed precision training
   num_workers: 4
@@ -59,7 +59,7 @@ augmentation:
     - "shift"
     - "scale"
     - "warp"
-  noise_level: 0.01
+  noise_level: 0.02
   max_shift: 50
   scale_range: [0.9, 1.1]
 

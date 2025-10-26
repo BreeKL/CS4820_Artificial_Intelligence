@@ -130,8 +130,7 @@ class Trainer:
             self.optimizer,
             mode='min',
             factor=0.5,
-            patience=config.get('scheduler_patience', 5),
-            verbose=True
+            patience=config.get('scheduler_patience', 5)
         )
         
         # Mixed precision training
@@ -171,7 +170,11 @@ class Trainer:
         for batch_idx, batch in enumerate(pbar):
             if len(batch) == 3:
                 flux, labels, timestamps = batch
-                timestamps = timestamps.to(self.device) if timestamps[0] is not None else None
+                # Check if timestamps is not None before accessing
+                if timestamps is not None and not isinstance(timestamps, type(None)):
+                    timestamps = timestamps.to(self.device)
+                else:
+                    timestamps = None
             else:
                 flux, labels = batch
                 timestamps = None
@@ -231,7 +234,11 @@ class Trainer:
             for batch in pbar:
                 if len(batch) == 3:
                     flux, labels, timestamps = batch
-                    timestamps = timestamps.to(self.device) if timestamps[0] is not None else None
+                    # Check if timestamps is not None before accessing
+                    if timestamps is not None and not isinstance(timestamps, type(None)):
+                        timestamps = timestamps.to(self.device)
+                    else:
+                        timestamps = None
                 else:
                     flux, labels = batch
                     timestamps = None

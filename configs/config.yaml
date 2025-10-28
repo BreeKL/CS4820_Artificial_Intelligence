@@ -1,4 +1,5 @@
-# Light Curve Transformer Configuration
+# Optimized Configuration for Small Dataset (100 samples)
+# Target: ~150K parameters with heavy regularization
 
 # Data parameters
 data:
@@ -13,57 +14,71 @@ data:
 preprocessing:
   sigma_threshold: 3.0
   rolling_window: 50
-  savgol_window: 101
+  savgol_window: 51
   savgol_poly: 3
   max_gap_days: 2.0
-  segment_duration_days: 90.0
-  cadence_minutes: 30.0  # Kepler long cadence
+  segment_duration_days: 27.0
+  cadence_minutes: 30.0
   overlap: 0.0
 
-# Model architecture
+# Model architecture - DRASTICALLY REDUCED
 model:
-  input_dim: 1  # Flux only
-  d_model: 256
-  n_heads: 8
-  n_layers: 4
-  d_ff: 512
+  input_dim: 1
+  d_model: 64          # REDUCED from 256
+  n_heads: 4           # REDUCED from 8
+  n_layers: 2          # REDUCED from 4
+  d_ff: 256            # REDUCED from 512
   n_classes: 2
-  dropout: 0.2
+  dropout: 0.5         # INCREASED from 0.2 (heavy regularization)
   max_len: 2000
   use_temporal_encoding: true
 
 # Training parameters
 training:
   batch_size: 4
-  num_epochs: 100
-  learning_rate: 0.0005
-  weight_decay: 0.01
+  num_epochs: 100                    # INCREASED - small LR needs more epochs
+  learning_rate: 0.00003             # REDUCED 10x from 0.0005
+  weight_decay: 0.05                 # INCREASED from 0.01
   optimizer: "adamw"
-  scheduler_patience: 3
-  early_stopping_patience: 15
-  use_amp: true  # Mixed precision training
-  num_workers: 4
+  scheduler_patience: 5              # INCREASED from 3
+  early_stopping_patience: 5         # REDUCED from 25
+  use_amp: false                     # DISABLED for CPU training
+  num_workers: 2                     # REDUCED from 4 for CPU
   seed: 42
-
+  warmup_epochs: 5                   # NEW: gradual LR warmup
+  label_smoothing: 0.1               # NEW: prevent overconfidence
+  gradient_clip: 1.0                 # NEW: gradient clipping
+  
 # Paths
 paths:
   checkpoint_dir: "checkpoints"
   log_dir: "logs"
   results_dir: "results"
 
-# Data augmentation
+# Data augmentation 
 augmentation:
   enabled: true
+  augmentation_factor: 10             # NEW: multiply dataset 10x
   methods:
     - "noise"
     - "shift"
     - "scale"
     - "warp"
-  noise_level: 0.02
-  max_shift: 50
-  scale_range: [0.9, 1.1]
+  noise_level: 0.03                  # INCREASED from 0.02
+  max_shift: 100                     # INCREASED from 50
+  scale_range: [0.85, 1.15]          # WIDER from [0.9, 1.1]
+  warp_factor: 0.15                  # NEW: explicit warp strength
 
-# Class names (for visualization)
+# Class names
 classes:
   - "Non-Transit"
   - "Transit"
+  
+# Expected parameter count: ~150K (down from 2.2M)
+
+# With augmentation rate: 8, learning_rate: 0.00005 and early stopping patience of 25:
+# Train Loss: 0.6727 | Train Acc: 63.93%
+# Val Loss:   0.6288 | Val Acc:   66.67%
+# LR:         4.97e-05
+# ✓ Validation improved by 0.0072
+# ✓ Saved best model (val_loss: 0.6288)

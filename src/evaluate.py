@@ -5,6 +5,10 @@ Implements comprehensive evaluation metrics including accuracy, precision,
 recall, F1-score, ROC-AUC, and confusion matrix visualization.
 """
 
+# Set matplotlib backend before importing pyplot (prevents blocking)
+import matplotlib
+matplotlib.use('Agg')  # Non-interactive backend
+
 import torch
 import numpy as np
 from sklearn.metrics import (
@@ -16,6 +20,7 @@ import seaborn as sns
 from typing import Dict, List, Tuple, Optional
 from pathlib import Path
 from tqdm import tqdm
+import yaml
 
 from model import LightCurveTransformer
 
@@ -58,31 +63,45 @@ class ModelEvaluator:
         all_labels = []
         all_probs = []
         
+        # Disable tqdm for very small datasets
+        use_tqdm = len(data_loader) > 10
+        iterator = tqdm(data_loader, desc='Predicting', disable=not use_tqdm)
+        
+        self.model.eval()  # Ensure eval mode
+        
         with torch.no_grad():
-            for batch in tqdm(data_loader, desc='Predicting'):
+            for batch in iterator:
+                # Handle different batch formats
                 if len(batch) == 3:
                     flux, labels, timestamps = batch
-                    timestamps = timestamps.to(self.device) if timestamps[0] is not None else None
+                    # Only move to device if timestamps exist and aren't None
+                    if timestamps is not None and timestamps[0] is not None:
+                        timestamps = timestamps.to(self.device)
+                    else:
+                        timestamps = None
                 else:
                     flux, labels = batch
                     timestamps = None
                 
+                # Move data to device
                 flux = flux.to(self.device)
                 
                 # Forward pass
                 outputs = self.model(flux, timestamps)
                 probs = torch.softmax(outputs, dim=1)
                 
-                # Get predictions
-                _, predicted = outputs.max(1)
+                # Get predictions (use argmax for efficiency)
+                predicted = torch.argmax(outputs, dim=1)
                 
-                all_predictions.extend(predicted.cpu().numpy())
-                all_labels.extend(labels.numpy())
-                all_probs.extend(probs.cpu().numpy())
+                # Move to CPU and convert to numpy in one step
+                all_predictions.append(predicted.cpu().numpy())
+                all_labels.append(labels.numpy())
+                all_probs.append(probs.cpu().numpy())
         
-        predictions = np.array(all_predictions)
-        labels = np.array(all_labels)
-        probs = np.array(all_probs)
+        # Concatenate all batches at once (faster than extend)
+        predictions = np.concatenate(all_predictions)
+        labels = np.concatenate(all_labels)
+        probs = np.concatenate(all_probs)
         
         if return_probabilities:
             return probs, labels
@@ -113,27 +132,33 @@ class ModelEvaluator:
         
         # For binary classification
         if len(np.unique(labels)) == 2:
-            metrics['precision'] = precision_score(labels, predictions)
-            metrics['recall'] = recall_score(labels, predictions)
-            metrics['f1_score'] = f1_score(labels, predictions)
+            metrics['precision'] = precision_score(labels, predictions, zero_division=0)
+            metrics['recall'] = recall_score(labels, predictions, zero_division=0)
+            metrics['f1_score'] = f1_score(labels, predictions, zero_division=0)
             
             if probabilities is not None:
                 # ROC-AUC for positive class
-                metrics['roc_auc'] = roc_auc_score(labels, probabilities[:, 1])
+                try:
+                    metrics['roc_auc'] = roc_auc_score(labels, probabilities[:, 1])
+                except ValueError:
+                    metrics['roc_auc'] = 0.0
         else:
             # Multi-class metrics
-            metrics['precision_macro'] = precision_score(labels, predictions, average='macro')
-            metrics['recall_macro'] = recall_score(labels, predictions, average='macro')
-            metrics['f1_score_macro'] = f1_score(labels, predictions, average='macro')
+            metrics['precision_macro'] = precision_score(labels, predictions, average='macro', zero_division=0)
+            metrics['recall_macro'] = recall_score(labels, predictions, average='macro', zero_division=0)
+            metrics['f1_score_macro'] = f1_score(labels, predictions, average='macro', zero_division=0)
             
-            metrics['precision_weighted'] = precision_score(labels, predictions, average='weighted')
-            metrics['recall_weighted'] = recall_score(labels, predictions, average='weighted')
-            metrics['f1_score_weighted'] = f1_score(labels, predictions, average='weighted')
+            metrics['precision_weighted'] = precision_score(labels, predictions, average='weighted', zero_division=0)
+            metrics['recall_weighted'] = recall_score(labels, predictions, average='weighted', zero_division=0)
+            metrics['f1_score_weighted'] = f1_score(labels, predictions, average='weighted', zero_division=0)
             
             if probabilities is not None:
-                metrics['roc_auc_ovr'] = roc_auc_score(
-                    labels, probabilities, multi_class='ovr'
-                )
+                try:
+                    metrics['roc_auc_ovr'] = roc_auc_score(
+                        labels, probabilities, multi_class='ovr'
+                    )
+                except ValueError:
+                    metrics['roc_auc_ovr'] = 0.0
         
         return metrics
     
@@ -171,7 +196,10 @@ class ModelEvaluator:
         
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        plt.show()
+            print(f"Saved confusion matrix to {save_path}")
+            plt.close()  # Close figure to free memory
+        else:
+            plt.show()
     
     def plot_roc_curve(
         self,
@@ -187,22 +215,28 @@ class ModelEvaluator:
             probabilities: Class probabilities
             save_path: Path to save figure
         """
-        fpr, tpr, thresholds = roc_curve(labels, probabilities[:, 1])
-        auc = roc_auc_score(labels, probabilities[:, 1])
-        
-        plt.figure(figsize=(8, 6))
-        plt.plot(fpr, tpr, label=f'ROC Curve (AUC = {auc:.3f})', linewidth=2)
-        plt.plot([0, 1], [0, 1], 'k--', label='Random Classifier')
-        plt.xlabel('False Positive Rate')
-        plt.ylabel('True Positive Rate')
-        plt.title('ROC Curve')
-        plt.legend()
-        plt.grid(alpha=0.3)
-        plt.tight_layout()
-        
-        if save_path:
-            plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        plt.show()
+        try:
+            fpr, tpr, thresholds = roc_curve(labels, probabilities[:, 1])
+            auc = roc_auc_score(labels, probabilities[:, 1])
+            
+            plt.figure(figsize=(8, 6))
+            plt.plot(fpr, tpr, label=f'ROC Curve (AUC = {auc:.3f})', linewidth=2)
+            plt.plot([0, 1], [0, 1], 'k--', label='Random Classifier')
+            plt.xlabel('False Positive Rate')
+            plt.ylabel('True Positive Rate')
+            plt.title('ROC Curve')
+            plt.legend()
+            plt.grid(alpha=0.3)
+            plt.tight_layout()
+            
+            if save_path:
+                plt.savefig(save_path, dpi=300, bbox_inches='tight')
+                print(f"Saved ROC curve to {save_path}")
+                plt.close()  # Close figure to free memory
+            else:
+                plt.show()
+        except ValueError as e:
+            print(f"Could not plot ROC curve: {e}")
     
     def print_classification_report(
         self,
@@ -224,7 +258,8 @@ class ModelEvaluator:
             labels, 
             predictions, 
             target_names=class_names,
-            digits=4
+            digits=4,
+            zero_division=0
         )
         print(report)
     
@@ -245,7 +280,9 @@ class ModelEvaluator:
         Returns:
             Dictionary of evaluation metrics
         """
-        print("Starting evaluation...")
+        print("\n" + "="*70)
+        print("STARTING EVALUATION")
+        print("="*70)
         
         # Get predictions
         probabilities, labels = self.predict(data_loader, return_probabilities=True)
@@ -267,6 +304,7 @@ class ModelEvaluator:
         if save_dir:
             save_dir = Path(save_dir)
             save_dir.mkdir(parents=True, exist_ok=True)
+            print(f"\nSaving visualizations to {save_dir}")
         
         # Plot confusion matrix
         cm_path = save_dir / 'confusion_matrix.png' if save_dir else None
@@ -276,6 +314,10 @@ class ModelEvaluator:
         if len(np.unique(labels)) == 2:
             roc_path = save_dir / 'roc_curve.png' if save_dir else None
             self.plot_roc_curve(labels, probabilities, roc_path)
+        
+        print("\n" + "="*70)
+        print("EVALUATION COMPLETE")
+        print("="*70)
         
         return metrics
     
@@ -337,7 +379,10 @@ class ModelEvaluator:
         
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        plt.show()
+            print(f"Saved attention visualization to {save_path}")
+            plt.close()
+        else:
+            plt.show()
 
 
 def load_model_for_evaluation(checkpoint_path: str, device: str = None) -> LightCurveTransformer:
@@ -354,15 +399,33 @@ def load_model_for_evaluation(checkpoint_path: str, device: str = None) -> Light
     if device is None:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
-    checkpoint = torch.load(checkpoint_path, map_location=device)
-    config = checkpoint['config']
+    checkpoint_path = Path(checkpoint_path)
     
+    # Load full config from yaml file in checkpoint directory
+    config_file = checkpoint_path.parent / 'config.yaml'
+    if not config_file.exists():
+        raise FileNotFoundError(
+            f"Config file not found at {config_file}. "
+            f"Make sure you're pointing to the correct checkpoint directory."
+        )
+    
+    with open(config_file, 'r') as f:
+        full_config = yaml.safe_load(f)
+        model_config = full_config['model']
+    
+    # Load checkpoint
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    
+    # Create and load model
     from model import create_model
-    model = create_model(config)
+    model = create_model(model_config)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
     
     print(f"Loaded model from {checkpoint_path}")
+    print(f"Model config: d_model={model_config['d_model']}, "
+          f"n_layers={model_config['n_layers']}, "
+          f"n_heads={model_config['n_heads']}")
     print(f"Best validation loss: {checkpoint.get('best_val_loss', 'N/A')}")
     
     return model
@@ -376,9 +439,10 @@ if __name__ == "__main__":
     # Load model
     model = load_model_for_evaluation('checkpoints/best_model.pth')
     
-    # Create dummy test data
-    test_flux = np.random.randn(200, 4320)
-    test_labels = np.random.randint(0, 2, 200)
+    # Load test data
+    test_data = np.load('data/processed/test_data.npz')
+    test_flux = test_data['flux']
+    test_labels = test_data['labels']
     
     test_dataset = LightCurveDataset(test_flux, test_labels)
     test_loader = DataLoader(
@@ -395,3 +459,5 @@ if __name__ == "__main__":
         class_names=['Non-Transit', 'Transit'],
         save_dir='evaluation_results'
     )
+    
+    print(f"\nFinal Test Accuracy: {metrics['accuracy']:.2%}")

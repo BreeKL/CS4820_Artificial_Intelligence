@@ -172,7 +172,7 @@ class LightCurvePreprocessor:
             trend = savgol_filter(flux, self.savgol_window, self.savgol_poly)
         
         df = df.copy()
-        df['flux'] = flux - trend
+        df['flux'] = flux / trend
         
         return df
     
@@ -240,6 +240,7 @@ class LightCurvePreprocessor:
         
         return df
     
+    # Z-score normalization to preserve relative amplitudes
     def normalize(self, flux: np.ndarray) -> np.ndarray:
         """
         Normalize flux values while preserving relative amplitudes.
@@ -260,6 +261,21 @@ class LightCurvePreprocessor:
             normalized = flux - mean
         
         return normalized
+
+    # Min-max normalization with outlier clipping
+    # def normalize(self, flux: np.ndarray) -> np.ndarray:
+    #     """Simple normalization for divided flux."""
+    #     # Clip outliers
+    #     flux = np.clip(flux, np.percentile(flux, 1), np.percentile(flux, 99))
+        
+    #     # Min-max to [0, 1] or [-1, 1]
+    #     flux_min = flux.min()
+    #     flux_max = flux.max()
+    #     normalized = (flux - flux_min) / (flux_max - flux_min)  # [0, 1]
+    #     # Or: normalized = 2 * (flux - flux_min) / (flux_max - flux_min) - 1  # [-1, 1]
+    
+    #     return normalized
+
     
     def segment_light_curve(
         self, 

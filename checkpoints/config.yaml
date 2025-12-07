@@ -1,61 +1,84 @@
-augmentation:
-  augmentation_factor: 10
-  enabled: true
-  max_shift: 100
-  methods:
-  - noise
-  - shift
-  - scale
-  - warp
-  noise_level: 0.03
-  scale_range:
-  - 0.85
-  - 1.15
-  warp_factor: 0.15
-classes:
-- Non-Transit
-- Transit
+# Optimized Configuration for Small Dataset (100 samples)
+# Target: ~150K parameters with heavy regularization
+
+# Data parameters
 data:
-  processed_dir: data/processed
-  raw_dir: data/raw
-  splits_dir: data/splits
-  test_ratio: 0.15
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  splits_dir: "data/splits"
   train_ratio: 0.7
   val_ratio: 0.15
-model:
-  d_ff: 256
-  d_model: 64
-  dropout: 0.5
-  input_dim: 1
-  max_len: 2000
-  n_classes: 2
-  n_heads: 4
-  n_layers: 2
-  use_temporal_encoding: true
-paths:
-  checkpoint_dir: checkpoints
-  log_dir: logs
-  results_dir: results
+  test_ratio: 0.15
+
+# Preprocessing parameters
 preprocessing:
-  cadence_minutes: 30.0
-  max_gap_days: 2.0
-  overlap: 0.0
-  rolling_window: 50
-  savgol_poly: 3
-  savgol_window: 51
-  segment_duration_days: 27.0
   sigma_threshold: 3.0
+  rolling_window: 50
+  savgol_window: 51
+  savgol_poly: 3
+  max_gap_days: 2.0
+  segment_duration_days: 27.0
+  cadence_minutes: 30.0
+  overlap: 0.0
+
+# Model architecture - DRASTICALLY REDUCED
+model:
+  input_dim: 1
+  d_model: 64          # REDUCED from 256
+  n_heads: 4           # REDUCED from 8
+  n_layers: 2          # REDUCED from 4
+  d_ff: 256            # REDUCED from 512
+  n_classes: 2
+  dropout: 0.5         # INCREASED from 0.2 (heavy regularization)
+  max_len: 2000
+  use_temporal_encoding: true
+
+# Training parameters
 training:
   batch_size: 4
-  early_stopping_patience: 5
-  gradient_clip: 1.0
-  label_smoothing: 0.1
-  learning_rate: 3.0e-05
-  num_epochs: 100
-  num_workers: 2
-  optimizer: adamw
-  scheduler_patience: 5
+  num_epochs: 100                    # INCREASED - small LR needs more epochs
+  learning_rate: 0.00003             # REDUCED 10x from 0.0005
+  weight_decay: 0.05                 # INCREASED from 0.01
+  optimizer: "adamw"
+  scheduler_patience: 5              # INCREASED from 3
+  early_stopping_patience: 5         # REDUCED from 25
+  use_amp: false                     # DISABLED for CPU training
+  num_workers: 2                     # REDUCED from 4 for CPU
   seed: 42
-  use_amp: false
-  warmup_epochs: 5
-  weight_decay: 0.05
+  warmup_epochs: 5                   # NEW: gradual LR warmup
+  label_smoothing: 0.1               # NEW: prevent overconfidence
+  gradient_clip: 1.0                 # NEW: gradient clipping
+  
+# Paths
+paths:
+  checkpoint_dir: "checkpoints"
+  log_dir: "logs"
+  results_dir: "results"
+
+# Data augmentation 
+augmentation:
+  enabled: true
+  augmentation_factor: 10             # NEW: multiply dataset 10x
+  methods:
+    - "noise"
+    - "shift"
+    - "scale"
+    - "warp"
+  noise_level: 0.03                  # INCREASED from 0.02
+  max_shift: 100                     # INCREASED from 50
+  scale_range: [0.85, 1.15]          # WIDER from [0.9, 1.1]
+  warp_factor: 0.15                  # NEW: explicit warp strength
+
+# Class names
+classes:
+  - "Non-Transit"
+  - "Transit"
+  
+# Expected parameter count: ~150K (down from 2.2M)
+
+# With augmentation rate: 8, learning_rate: 0.00005 and early stopping patience of 25:
+# Train Loss: 0.6727 | Train Acc: 63.93%
+# Val Loss:   0.6288 | Val Acc:   66.67%
+# LR:         4.97e-05
+# ✓ Validation improved by 0.0072
+# ✓ Saved best model (val_loss: 0.6288)

@@ -1,2 +1,6 @@
 /data
+/data_3k_tess
+/kepler_data
 /src/__pycache__
+*.tar.gz
+*.pyc

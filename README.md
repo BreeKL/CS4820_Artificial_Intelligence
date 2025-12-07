@@ -22,10 +22,13 @@ project_root/
 ├── data/
 │   ├── raw/              # Raw FITS/CSV files
 │   ├── processed/        # Preprocessed light curves
-│   └── splits/           # Train/val/test splits
+│   └── manifest.csv      # Contains labeled planet info
 ├── src/
-│   ├── preprocessing.py  # Data cleaning and preprocessing
+│   ├── update_manifest.py # Add curve_path to manifest if needed
+│   ├── load_manifest_data.py  # Runs preprocessing
+│   ├── preprocessing.py  # Functions for data cleaning and preprocessing
 │   ├── model.py         # Transformer architecture
+│   ├── optuna_tuning_*.py # Tuning scripts for different systems
 │   ├── train.py         # Training loop
 │   ├── evaluate.py      # Evaluation metrics
 │   ├── utils.py         # Helper functions
@@ -45,36 +48,103 @@ project_root/
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.8 or higher (built with 3.14)
 - CUDA-capable GPU (recommended for training)
+    or Google Colab 
+    (can run on CPU but will take forever)
 
 ### Setup
 
-1. Clone the repository:
-```bash
-jupyter notebook notebooks/exploration.ipynb
+Download and extract the zip file,
+
+or Clone the git repository:
+
+https://github.com/BreeKL/CS4820_Artificial_Intelligence
+
+If using Google Colab GPU's, copy this Jupyter notebook to colab:
+
+`notebooks/colab_training.ipynb`
+
+Install requirements in a virtual environment with:
+
+`pip install -r requirements.txt`
+
+### 0. Download data
+
+Download data from whatever survey satelite has light curve data (TESS, Kepler/K2, etc.)
+
+Ensure the raw downloaded data is structured like this 
+from the root directory:
+
+```
+data/
+├── raw
+│   ├── <curve_id>_lightcurve.csv
+│   └── ...
+└── manifest.csv
 ```
 
-Or use the preprocessing module directly in Python:
+Ensure the data in the light curve file has time and flux data:
+```
+time,flux
+1310.5564883084953,0.0
+1310.5578771848113,204917.625
+1310.5592660611273,206914.515625
+1310.560654937909,205338.171875
+1310.562043814225,206816.875
+```
 
-```python
-from src.preprocessing import LightCurvePreprocessor
+The manifest.csv should be downloaded with at least 
+tic_id and planet label. 
+A curve path is required, but can 
+be added by running this script from the project root:
 
-# Initialize preprocessor
-preprocessor = LightCurvePreprocessor(
-    sigma_threshold=3.0,
-    segment_duration_days=90.0,
-    cadence_minutes=30.0
-)
+``` bash
+python src/update_manifest.py
+```
 
-# Preprocess a single file
-segments, timestamps = preprocessor.preprocess(
-    'data/raw/kplr001234567-2009131105131_llc.fits',
-    segment=True
-)
+The manifest file should have this structure:
+```
+tic_id,label,curve_path
+410005088,planet,data/raw/410005088_lightcurve.csv
+260351540,planet,data/raw/260351540_lightcurve.csv
+98127257,planet,data/raw/98127257_lightcurve.csv
+120414058,planet,data/raw/120414058_lightcurve.csv
+278683385,planet,data/raw/278683385_lightcurve.csv
+```
+
+### 1. Preprocessing
+
+Once the data is correctly downloaded, run from the project root:
+
+``` bash
+python src/load_manifest_data.py
+```
+
+This will apply preprocessing to the data and save like this:
+
+```
+data/
+├── processed
+│   ├── dataset_metadata.json
+│   ├── preprocessed_data.npz
+│   ├── test_data.npz
+│   ├── train_data.npz
+│   └── val_data.npz
+├── raw
+│   ├── <curve_id>_lightcurve.csv
+│   └── ...
+├── manifest.csv
+└── selected_manifest.csv
 ```
 
 ### 2. Training
+
+If using Google Colab, tar the src file and the data file and 
+upload to your Google Drive, and switch to the Jupyter 
+notebook. Update the notebook with your Google Drive file locations.
+
+Otherwise, if running locally:
 
 From the project root directory:
 
@@ -96,28 +166,24 @@ python src/main.py --config configs/config.yaml --resume checkpoints/latest_chec
 
 ### 3. Evaluation
 
-```python
-from src.evaluate import ModelEvaluator, load_model_for_evaluation
-from torch.utils.data import DataLoader
-from src.train import LightCurveDataset, collate_fn
+main.py will run an evaluation on the test data reserved from 
+the training and validation data. 
 
-# Load trained model
-model = load_model_for_evaluation('checkpoints/best_model.pth')
+If you want to run the evaluation again:
 
-# Prepare test data
-test_dataset = LightCurveDataset(test_flux, test_labels)
-test_loader = DataLoader(test_dataset, batch_size=32, collate_fn=collate_fn)
-
-# Evaluate
-evaluator = ModelEvaluator(model)
-metrics = evaluator.evaluate(
-    test_loader,
-    class_names=['Non-Transit', 'Transit'],
-    save_dir='results'
-)
+```bash
+python src/evaluate.py
 ```
 
-### 4. Inference on New Data
+### 4. Inference on New Data (zero-shot)
+
+Download new data, with the same format as Step 0. Preprocess the new data, specifying the number of planets (n-planets) and non planets (n-non-planets) withing your data:
+
+```bash
+python src/load_manifest_data.py --test-only --n-planets 100 --n-non-planets 100
+```
+
+Or add this to the Jupyter notebook:
 
 ```python
 from src.utils import InferencePipeline
@@ -140,7 +206,8 @@ results = pipeline.predict_batch(
 
 ## Configuration
 
-Edit `configs/config.yaml` to customize:
+Edit `configs/config.yaml` to customize, or run Optuna to 
+find better parameters:
 
 ### Model Architecture
 - `d_model`: Embedding dimension (128-512)
@@ -202,17 +269,6 @@ evaluator.visualize_attention(
 )
 ```
 
-## File Path Updates
-
-If you've moved `main.py` to the `src/` folder, the following changes are needed in `src/main.py`:
-
-**Line 11**: Remove `sys.path.append('src')`
-
-**Line 128**: Change default config path:
-```python
-default='../configs/config.yaml',  # Updated for src/ location
-```
-
 ## References
 
 1. **Transformer Architecture**:
@@ -234,105 +290,31 @@ default='../configs/config.yaml',  # Updated for src/ location
 - Reduce `d_model` or `n_layers`
 - Use gradient accumulation
 
-### Poor Performance
-- Increase model capacity (`d_model`, `n_layers`)
-- Adjust `learning_rate`
-- Use data augmentation
-- Increase training data
-
-### Slow Training
-- Enable mixed precision (`use_amp: true`)
-- Increase `batch_size`
-- Use multiple GPUs (modify training code)
-
 ### Import Errors
 - Ensure you're in the project root directory when running scripts
 - Use `python src/main.py` not `cd src && python main.py`
 - Check that all dependencies are installed: `pip install -r requirements.txt`
 
-## Quick Start Example
-
-```bash
-# 1. Prepare your data
-jupyter notebook notebooks/exploration.ipynb
-
-# 2. Train the model
-python src/main.py --config configs/config.yaml
-
-# 3. Evaluate
-python -c "
-from src.evaluate import ModelEvaluator, load_model_for_evaluation
-from src.train import LightCurveDataset, collate_fn
-from torch.utils.data import DataLoader
-import numpy as np
-
-model = load_model_for_evaluation('checkpoints/best_model.pth')
-# Load your test data here
-"
-```
+## Data Sources
+Light curves from the Kepler mission were downloaded via 
+lightkurve from the MAST archive at STScI. Confirmed planets 
+and false positives were selected from the NASA Exoplanet 
+Archive KOI cumulative table.
 
 ## License
 
 This project is released under the MIT License.
 
-## Citation
+## Acknowledgements
 
-If you use this code in your research, please cite:
+This project includes data collected by the Kepler mission and 
+obtained from the MAST data archive at the Space Telescope Science 
+Institute (STScI). Funding for the Kepler mission is provided by 
+the NASA Science Mission Directorate. STScI is operated by the 
+Association of Universities for Research in Astronomy, Inc., under 
+NASA contract NAS 5–26555.
 
-```bibtex
-@software{lightcurve_transformer,
-  title={Light Curve Transformer for Kepler/TESS Data},
-  author={Your Name},
-  year={2025},
-  url={https://github.com/yourusername/lightcurve-transformer}
-}
-```
-
-## Contact
-
-For questions or issues, please open an issue on GitHub or contact [your-email@example.com].
-
-git clone <repository-url>
-cd lightcurve-transformer
-```
-
-2. Create a virtual environment:
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-## Data Format
-
-### FITS Files (Kepler/TESS)
-
-The preprocessor automatically handles standard Kepler and TESS FITS files with columns:
-- `TIME` or `BTJD`: Barycentric Julian Date
-- `SAP_FLUX` or `PDCSAP_FLUX`: Flux measurements
-
-### CSV Files
-
-CSV files should contain at minimum:
-- `time` (or `bjd`, `btjd`, `mjd`): Time stamps
-- `flux` (or `sap_flux`, `pdcsap_flux`): Flux measurements
-
-Example CSV format:
-```csv
-time,flux
-1234.56,1000.23
-1234.58,998.45
-1234.60,1001.12
-```
-
-## Usage
-
-### 1. Data Preprocessing
-
-Use the Jupyter notebook for interactive exploration and preprocessing:
-
-```bash
+This research has made use of the NASA Exoplanet Archive, which 
+is operated by the California Institute of Technology, under 
+contract with the National Aeronautics and Space Administration 
+under the Exoplanet Exploration Program.

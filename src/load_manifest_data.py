@@ -42,9 +42,18 @@ def process_single_light_curve_worker(args):
     """
     row_dict, data_root, preprocessor_config, segment, overlap = args
     
+    preprocessing_section = preprocessor_config.get('preprocessing', preprocessor_config)
+
+    # auto-detect mission from tic_id 
+    tic_id = str(row_dict['tic_id'])
+    if tic_id.startswith('KIC'):
+        mission_config = preprocessing_section.get('kepler', preprocessing_section)
+    else:  # Tess or Lilith 
+        mission_config = preprocessing_section.get('tess', preprocessing_section)
+
     try:
         # Create preprocessor in worker process
-        preprocessor = LightCurvePreprocessor(**preprocessor_config)
+        preprocessor = LightCurvePreprocessor(**mission_config)
         
         # Load light curve
         curve_path = Path(data_root) / row_dict['curve_path']

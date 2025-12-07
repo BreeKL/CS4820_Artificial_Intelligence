@@ -12,14 +12,26 @@ data:
 
 # Preprocessing parameters
 preprocessing:
-  sigma_threshold: 3.0
-  rolling_window: 50
-  savgol_window: 51
-  savgol_poly: 3
-  max_gap_days: 2.0
-  segment_duration_days: 27.0
-  cadence_minutes: 30.0
-  overlap: 0.0
+  tess: # And Lilith
+    sigma_threshold: 4.0
+    rolling_window: 50      # 100×2min = 3.3 hours
+    savgol_window: 60       # 120×2min = 240 min = 4 hours
+    savgol_poly: 3
+    max_gap_days: 0.5        # TESS sector gaps
+    segment_duration_days: 27.0
+    cadence_minutes: 4.0     # downsample from 2-min to 4-min
+    overlap: 0.0
+
+  kepler:
+    sigma_threshold: 3.0
+    rolling_window: 7       # 7×30min = 210 min ≈ 3.5 hours
+    savgol_window: 8        # 8×30min = 240 min = 4 hours
+    savgol_poly: 3
+    max_gap_days: 2.0        # Kepler quarterly gaps
+    segment_duration_days: 90.0
+    cadence_minutes: 30.0
+    overlap: 0.0
+
 
 # Model architecture - DRASTICALLY REDUCED
 model:

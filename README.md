@@ -118,7 +118,7 @@ tic_id,label,curve_path
 Once the data is correctly downloaded, run from the project root:
 
 ``` bash
-python src/load_manifest_data.py
+python src/load_manifest_data.py --n-planets 100 --n-non-planets 100
 ```
 
 This will apply preprocessing to the data and save like this:
@@ -140,9 +140,17 @@ data/
 
 ### 2. Training
 
-If using Google Colab, tar the src file and the data file and 
+If using Google Colab, tar the src file and the data file, 
 upload to your Google Drive, and switch to the Jupyter 
 notebook. Update the notebook with your Google Drive file locations.
+
+```bash
+# creates data/processed/*.npz files and metadata file
+tar -czf preprocessed_data.tar.gz -C data processed/
+
+# Creates src_code tar
+tar -czf src_code.tar.gz src/ configs/
+```
 
 Otherwise, if running locally:
 

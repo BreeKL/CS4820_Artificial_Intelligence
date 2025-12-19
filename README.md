@@ -23,6 +23,7 @@ project_root/
 │   ├── raw/              # Raw FITS/CSV files
 │   ├── processed/        # Preprocessed light curves
 │   └── manifest.csv      # Contains labeled planet info
+├── data_kepler_30        # The data used for the Kepler zero-shot test
 ├── src/
 │   ├── update_manifest.py # Add curve_path to manifest if needed
 │   ├── load_manifest_data.py  # Runs preprocessing
@@ -36,9 +37,8 @@ project_root/
 ├── configs/
 │   └── config.yaml      # Hyperparameters and paths
 ├── notebooks/
-│   └── exploration.ipynb # Data exploration
+│   └── colab_training.ipynb # Data exploration
 ├── checkpoints/         # Model checkpoints (created during training)
-├── logs/               # Training logs (created during training)
 ├── results/            # Evaluation results (created during evaluation)
 ├── requirements.txt
 └── README.md
@@ -55,7 +55,7 @@ project_root/
 
 ### Setup
 
-Download and extract the zip file,
+Download and extract the tar file,
 
 or Clone the git repository:
 
@@ -115,7 +115,7 @@ tic_id,label,curve_path
 
 ### 1. Preprocessing
 
-Once the data is correctly downloaded, run from the project root:
+Once the data is correctly downloaded, run from the project root, adjusting the number of planets/non-planets as needed:
 
 ``` bash
 python src/load_manifest_data.py --n-planets 100 --n-non-planets 100
@@ -127,7 +127,6 @@ This will apply preprocessing to the data and save like this:
 data/
 ├── processed
 │   ├── dataset_metadata.json
-│   ├── preprocessed_data.npz
 │   ├── test_data.npz
 │   ├── train_data.npz
 │   └── val_data.npz
@@ -145,7 +144,7 @@ upload to your Google Drive, and switch to the Jupyter
 notebook. Update the notebook with your Google Drive file locations.
 
 ```bash
-# creates data/processed/*.npz files and metadata file
+# creates data/processed/*.npz files and metadata tar
 tar -czf preprocessed_data.tar.gz -C data processed/
 
 # Creates src_code tar
@@ -253,29 +252,6 @@ The model is evaluated using:
 - **Recall**: True positive rate (sensitivity)
 - **F1-Score**: Harmonic mean of precision and recall
 - **ROC-AUC**: Area under the receiver operating characteristic curve
-
-## Visualization
-
-### Training History
-```python
-from src.utils import plot_training_history
-import json
-
-with open('checkpoints/training_history.json', 'r') as f:
-    history = json.load(f)
-
-plot_training_history(history, save_path='training_curves.png')
-```
-
-### Attention Weights
-```python
-evaluator.visualize_attention(
-    flux_tensor,
-    timestamps,
-    layer_idx=-1,
-    save_path='attention_weights.png'
-)
-```
 
 ## References
 

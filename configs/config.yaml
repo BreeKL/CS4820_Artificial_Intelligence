@@ -36,25 +36,25 @@ preprocessing:
 # Model architecture - DRASTICALLY REDUCED
 model:
   input_dim: 1
-  d_model: 64          # REDUCED from 256
-  n_heads: 4           # REDUCED from 8
-  n_layers: 2          # REDUCED from 4
-  d_ff: 256            # REDUCED from 512
+  d_model: 256          
+  n_heads: 4           
+  n_layers: 4          
+  d_ff: 512            
   n_classes: 2
-  dropout: 0.5         # INCREASED from 0.2 (heavy regularization)
-  max_len: 2000
+  dropout: 0.2         
   use_temporal_encoding: true
 
 # Training parameters
 training:
-  batch_size: 4
+  batch_size: 32
   num_epochs: 100                    # INCREASED - small LR needs more epochs
   learning_rate: 0.00003             # REDUCED 10x from 0.0005
-  weight_decay: 0.05                 # INCREASED from 0.01
+  weight_decay: 1e-4                 # DECREASED from 0.01
   optimizer: "adamw"
   scheduler_patience: 5              # INCREASED from 3
-  early_stopping_patience: 5         # REDUCED from 25
-  use_amp: false                     # DISABLED for CPU training
+  scheduler: "cosine"
+  early_stopping_patience: 15         # REDUCED from 25
+  use_amp: True                     
   num_workers: 2                     # REDUCED from 4 for CPU
   seed: 42
   warmup_epochs: 5                   # NEW: gradual LR warmup
